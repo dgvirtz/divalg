@@ -1,5 +1,12 @@
 //This file computes a cyclic subextension of degree r to the given cyclotomic extension in the number field case.
-GenerateSubfieldLL := function(r,p,zeta)
+import "invariants.m":GlobalPlace;
+
+intrinsic GenerateSubfieldLL(r::RngIntElt,p::RngIntElt)
+-> FldNum, Map, FldFinElt
+{}
+  w := GlobalPlace(Rationals(),p);
+  zeta := PrimitiveElement(ResidueClassField(w));
+
   E<s> := CyclotomicField(p);
   h := hom<E->E|s^(Integers()!Integers(p)!(zeta))>;
   x := 0;
@@ -16,5 +23,5 @@ GenerateSubfieldLL := function(r,p,zeta)
   L := ext<Rationals()|f>;
   Embed(L, E, x);  
   sigma := hom<L->L|h(x)>;
-  return L, sigma;
-end function;
+  return L, sigma, zeta;
+end intrinsic;

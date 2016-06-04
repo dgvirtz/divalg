@@ -1,4 +1,7 @@
 //This file computes the division algebra.
+import "invariants.m":GlobalPlace,LocalCycDegree,LocalSubDegree;
+import "util.m":SeqSum;
+import "subfield_fun.m":FrobKummer;
 
 //decompose the invariants into numerator and denominator
 DecomposeInv := function(inv)
@@ -65,15 +68,20 @@ end function;
 
 //main function to compute the cyclic algebra
 //returns cyclic extension L of deg r, automorphism sigma, a, and found ramification place pi_F 
-CyclicAlgebra := function(places,inv, F)
-  error if #places ne #inv, "Number of places and invariants unequal";
-  error if #places ne #SequenceToSet(places), "Places must not occur several times";
+intrinsic CyclicAlgebra(places::[RngElt],inv::[FldRatElt], A::Rng)
+-> Fld, Map, Fld, FldElt, RngElt
+{}
+  require #places eq #inv: "Number of places and invariants unequal";
+  require #places eq #SequenceToSet(places): "Places must not occur several times";
+  for p in places do
+    require IsIrreducible(A!p): p, "is reducible";
+  end for;
   sum := SeqSum(inv);
   _,denoms := DecomposeInv(inv); r := LCM(denoms);
   
-  A := RingOfIntegers(F);
+  F := FieldOfFractions(A);
   if ISA(Type(F), FldRat) then
-    error if not(IsDivisibleBy(2,Denominator(sum))), "Sum of invariants is",sum;
+    require (IsDivisibleBy(2,Denominator(sum))): "Sum of invariants is",sum;
   
     pi_F:=1;
     repeat
@@ -82,13 +90,14 @@ CyclicAlgebra := function(places,inv, F)
 	pi_F := NextPrime(pi_F);
       end while;
       done := IsSuitablePlaceStrong(pi_F, places, denoms, F);
-      //done := done and not IsDivisibleBy((pi_F-1) div r, 2);
+      if not(IsIntegral(sum)) then
+	done := done and not IsDivisibleBy((pi_F-1) div r, 2);
+      end if;
     until done;
     print "Found p=",pi_F;
     w := GlobalPlace(F,pi_F);
-    zeta := PrimitiveElement(ResidueClassField(w));
     
-    L,sigma := GenerateSubfieldLL(r,pi_F,zeta);
+    L,sigma,zeta := GenerateSubfieldLL(r,pi_F);
     
     frobs := [];
     for P in places do
@@ -118,7 +127,7 @@ CyclicAlgebra := function(places,inv, F)
     print "Found pi_F=", pi_F;
     
     print "=Computing field extension=";
-    L,zeta,sigma,root := GenerateSubfieldKummer(r,pi_F,F);
+    L,sigma,zeta,root := GenerateSubfieldKummer(r,pi_F,F);
     
     print "Computing local Frobenii";
     frobs := [];
@@ -130,5 +139,5 @@ CyclicAlgebra := function(places,inv, F)
   print "Computing a";
   a := Compute_a(pi_F, places, inv, zeta, frobs, F);
   
-  return L,sigma,a,pi_F,r;
-end function;
+  return L,sigma,a,pi_F;
+end intrinsic;

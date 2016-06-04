@@ -1,4 +1,5 @@
 //This file computes some stuff related to global fields and wraps differing function/number field functions.
+import "util.m":MatLCM; 
 
 //returns a global lift of x in the residue field of place p
 GlobalLift := function(x,p)

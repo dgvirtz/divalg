@@ -1,4 +1,6 @@
 //This file contains the main functions to maximise the order locally at an unramified place given by a field element f.
+import "invariants.m":GlobalPlace,LocalSubDegree,IntegralClosureRing,FixDenominator;
+//import "util.m":EchelonBasis;
 
 //returns m and n such that f^m*(\tau^u)^n is maximal order of skewfield of order d^2
 MaximizeDivAlg := function(a,f,d,F)
@@ -28,8 +30,15 @@ LiftLocalBasis := function(Is,O,L,d,u,i)
   return b;
 end function;
 
-//main function to maximise order at unramified place by direct formula
-MaximizeUnramified := function(f,w,r,O,L,F,A,sigma,a)
+//main function to maximise order at unramified place given by f by direct formula
+intrinsic MaximizeUnramified(f::RngElt,L::Fld,sigma::Map,a::RngElt,pi_F::RngElt)
+-> Mtrx
+{}
+  A:=Parent(a); F:=FieldOfFractions(A); O:=IntegralClosureRing(A,L);
+  r := Degree(L);
+  print "Computing ramification place";
+  w := GlobalPlace(F, pi_F);
+  
   d := LocalSubDegree(F!f,w,r); u := r div d;
   m,n := MaximizeDivAlg(a,f,d,F);
   B := BasisMatrix(O)^-1;
@@ -54,18 +63,18 @@ MaximizeUnramified := function(f,w,r,O,L,F,A,sigma,a)
   es := [F!-1000: i in [1..d+1]];
   for i := 0 to d-1 do
     exp := n*i;
-    fc := f^(m*i);
-    ac := a^(exp div d);
+    fc := F!f^(m*i);
+    ac := F!a^(exp div d);
     es[exp mod d +1] := fc*ac;
   end for;
-  es[d+1] := f^(-Valuation(a, GlobalPlace(F,f)));
+  es[d+1] := F!f^(-Valuation(a, GlobalPlace(F,f)));
   M := IdentityMatrix(F, r^2);
   N := ZeroMatrix(F, d*r^2, r^2);
   for i := 0 to d-1 do
     for j := 1 to r do
       for k := 0 to r-1 do
 	exp := i*u+k;
-	N[i*r^2+k*r+j][(exp mod r)*r+j] := es[i+1]*a^(exp div r);
+	N[i*r^2+k*r+j][(exp mod r)*r+j] := es[i+1]*F!a^(exp div r);
       end for;
     end for;
   end for;
@@ -90,5 +99,12 @@ MaximizeUnramified := function(f,w,r,O,L,F,A,sigma,a)
  	R[i][exps[i]*r+k] := seq[k];
       end for;
   end for;
-  return VerticalJoin(VerticalJoin(M,N),R);
-end function;
+  lambda_v := VerticalJoin(VerticalJoin(M,N),R);
+  
+  print "Fixing Denominator";
+  lambda_v := FixDenominator(lambda_v, f, F);
+  print "Computing echelon form";
+  lambda_v := EchelonBasis(lambda_v, A);
+  
+  return lambda_v;
+end intrinsic;

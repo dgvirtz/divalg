@@ -1,4 +1,5 @@
 //This file computes a cyclic subextension of degree r to the given cyclotomic extension in the function field case.
+import "invariants.m":GlobalPlace, GlobalLift;
 
 //compute the representation of x in basis of FF(R) over Fprime
 RepresentationKummer := function(x,Fprime,R,dprime,r)
@@ -18,7 +19,10 @@ RepresentationKummer := function(x,Fprime,R,dprime,r)
 end function;
 
 //generate the subfield with the Kummer theory approach
-GenerateSubfieldKummer := function(r,hw,F)
+intrinsic GenerateSubfieldKummer(r::RngIntElt, hw::RngUPolElt, F::FldFunRat)
+-> FldFun, FldFinElt, Map, FldFinElt
+{}
+  require IsIrreducible(hw):"Second argument not irreducible";
   A := RingOfIntegers(F); q:=#BaseRing(A);
   k := ConstantField(F);
   dprime := Degree(hw);
@@ -58,6 +62,7 @@ GenerateSubfieldKummer := function(r,hw,F)
     if(n eq 1) then
       x1 := x;
     end if;
+    p;
     p *:= (u-x);
     for i:=1 to dprime do
       p := p mod ((R[i].1)^r - hs[i]);
@@ -84,8 +89,8 @@ GenerateSubfieldKummer := function(r,hw,F)
   print "Computing generator of Galois group";
   sigma := hom<L->L|L!Eltseq(img)>;
   
-  return L,zeta,sigma,root0;
-end function;
+  return L,sigma,zeta,root0;
+end intrinsic;
 
 //calculate the Frobenius of p
 FrobKummer := function(p,pi_F,r,A,root)
@@ -101,110 +106,95 @@ end function;
 
 //////////Old approaches to create the subfield L. Left here for the interested mind
 
-//utility to apply automorphism
-ApplyAuto := function(sigma,x,F,E)
-  R<l> := TwistedPolynomials(F);
-  phi_l := Polynomial(CarlitzModule(R,sigma));
-  E<l>:=E;
-  phi_l := eval(Sprintf("E!(%o)",phi_l));
-  phi := hom<E->E|phi_l>;
-  return phi(x);
-end function;
-
 //generate subfield by computing norm of primitive torsion point
-GenerateSubfieldNormal := function(hw,r,A,F)
+intrinsic GenerateSubfieldNormal(r::RngIntElt,hw::RngUPolElt,F::FldFunRat)
+-> FldFun, FldFun
+{}
+  require IsIrreducible(hw):"Second argument not irreducible";
+  A:=RingOfIntegers(F);
   w:=GlobalPlace(F,hw); k:=ResidueClassField(w); sigma:=A!GlobalLift(PrimitiveElement(k),w); 
-  R<T> := TwistedPolynomials(F);
+  R<T> := TwistedPolynomials(F:q:=#BaseRing(A));
   phi_prew := CarlitzModule(R,hw);
   phi_w := Polynomial(CarlitzModule(R,hw)) div Polynomial(R!1);
-  E<l> := Parent(phi_w);
-  E2<Z> := PolynomialRing(E);
+  Pol<l> := Parent(phi_w);
+  PolE<Z> := PolynomialRing(Pol);
   
   phi := CarlitzModule(R,A!(sigma)^r mod hw);
-  mu:=1; s := phi;
-  print "Computing generator orbit from 0 to ", Degree(phi_w div r);
-  for i := 1 to (Degree(phi_w) div r) do
-      i;
-      mu := mu*Polynomial(s) mod phi_w;
-      _,s := Quotrem(phi*s,phi_prew);
+  prod:=1;
+  for j:= 0 to r-1 do
+    "Computing normal basis element", j;
+    mu:=1;
+    s := CarlitzModule(R,A!(sigma)^j mod hw);
+    for i := 1 to (Degree(phi_w) div r) do
+	mu := mu*Polynomial(s) mod phi_w;
+	_,s := Quotrem(phi*s,phi_prew);
+	i;
+    end for;
+    prod := prod*(Z-mu) mod phi_w;
   end for;
   
-  prod := 1;
-  s := F!1;
-  for j:=0 to r-1 do
-    gamma := Polynomial(CarlitzModule(R,s));
-    prod:=prod*(Z-Evaluate(mu,gamma)) mod phi_w;
-    s *:= sigma;
-  end for;
-  L<m> := ext<F|prod>;
-  E<l> := ext<F|phi_w>;
-  mu := eval(Sprintf("E!(%o)",mu));
-  Embed(L,E,mu);
+  E := ext<F|phi_w>;
+  ev := hom<Pol->E|E.1>;
+  muE := ev(mu);
+  L := ext<F|prod>;
+  Embed(L,E,muE);
   return L,E;
-end function;
+end intrinsic;
 
 //generate subfield additively with Gauss-Thakur sums approach
-GenerateSubfieldTrace := function(r,hw,q,A,F)
-  P:=GlobalPlace(F,hw); k := ResidueClassField(P);
-  k2 := ext<GF(q)|hw>; sigma:=PrimitiveElement(k2);
-  zeta := PrimitiveElement(k); zetainv := zeta^-1;
-  R<T> := TwistedPolynomials(A);
+intrinsic GenerateSubfieldGT(r::RngIntElt,hw::RngUPolElt,F::FldFunRat)
+-> FldFun, FldFun
+{}
+  require IsIrreducible(hw):"Second argument not irreducible";
+  A:=RingOfIntegers(F); q:=#BaseRing(A);
+  w:=GlobalPlace(F,hw); k:= ResidueClassField(w); zeta:=PrimitiveElement(k);
+  
+  
+  R<T> := TwistedPolynomials(A:q:=q);
   phi_w := Polynomial(CarlitzModule(R,hw)) div Polynomial(R!1);
-  phi_w_tens := phi_w mod hw;
-  E<l> := Parent(phi_w);
-  
-  print "Computing Gauss sums of orders 0 to ", Degree(hw)-1;
-  jsums := [];
+  Pol := Parent(phi_w);
+  Ak := ChangeRing(A,k);
+  Polk := ChangeRing(Pol,Ak);
+  PolPolk<Z>:=PolynomialRing(Polk);
+
+  print "Computing basic Gauss sums from 0 to", Degree(hw)-1;
+  jsum:=[];
   for j:=0 to Degree(hw)-1 do
-    sum := 0;
-    zetainvpot := zetainv^(q^j);
-    b := zeta; binv := zetainvpot;
-    for i:=1 to #k do
-      bl := A!Lift(b,P); blinv := A!Lift(binv,P);
-      sum := (sum + blinv*Polynomial(CarlitzModule(R,bl))) mod phi_w_tens mod hw;
-      b *:= zeta; binv *:= zetainvpot;
-    end for;
-    j;
-    Append(~jsums, sum);
+   sum:=0;
+   for b in k do
+    if b ne 0 then
+      bl := A!GlobalLift(b,w);
+      sum := (sum - b^(-q^j)*Polk!(Polynomial(CarlitzModule(R,bl))));
+    end if;
+   end for;
+   Append(~jsum, sum mod Polk!phi_w);
+   j;
   end for;
-  jsumpot := [];
-  for g in jsums do
-    pots := [];
-    pot := g^0;
-    for i := 0 to q-1 do
-      Append(~pots,pot);
-      pot := (pot*g) mod phi_w_tens mod hw;
-    end for;
-    Append(~jsumpot,pots);
-  end for;
-  print "Computing and summing universal Gauss sums from 1 to ", Degree(phi_w);
-  n:=0;
-  for i:=1 to Degree(phi_w) do
-    gsum := E!1;
-    expansion := Intseq(i,q);
+  print "Computing universal Gauss sums from 0 to", r-1;
+  usums:=[Polk|];
+  for i:=0 to r-1 do
+    gsum := 1;
+    expansion := Intseq(i*(Degree(phi_w) div r),q);
     for j := 1 to #expansion do
-      gsum := (gsum * jsumpot[j][expansion[j]+1]) mod phi_w_tens mod hw;
+      gsum := (gsum * (jsum[j])^expansion[j]) mod Polk!phi_w;
     end for;
-    n := (n+gsum) mod phi_w_tens mod hw;
-    i;
+    Append(~usums, gsum);
   end for;
-  
-  print "Computing trace from 1 to ", (Degree(phi_w) div r);
+  mipo:=PolPolk!1;
+  print "Computing normal basis elements from 0 to", r-1;
+  for m:=0 to r-1 do
+    n:=0;
+    for i:=0 to r-1 do
+        n := (n+zeta^(i*m*(Degree(phi_w) div r))*usums[i+1]) mod Polk!phi_w;
+    end for;
+    mipo := mipo*(Z-n) mod PolPolk!phi_w;
+    mipo;
+    m;
+  end for;
   E<l>:=ext<F|phi_w>;
-  x:=eval(Sprintf("(%o)",n));
-  trace:=0; phi := A!1; sigmar := A!sigma^r mod hw;
-  for i:=1 to (Degree(phi_w) div r) do
-    trace +:= ApplyAuto(A!phi,x,F,E);
-    phi := (phi*sigmar) mod hw;
-    i;
-  end for;
-  P<Z> := PolynomialRing(E);
-  mipo := 1;
-  for i := 0 to r-1 do
-    mipo *:= (Z-ApplyAuto(sigma^i,trace,F,E));
-  end for;
-  L<m> := ext<F|mipo>;
-  Embed(L,E,trace);
+  ev:=hom<Pol->E|l>;
+  L:=ext<F|mipo>;
+  Embed(L,E,ev(n));
   
   return L,E;
-end function;
+end intrinsic;
